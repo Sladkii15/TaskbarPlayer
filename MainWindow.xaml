@@ -1,0 +1,210 @@
+<Window x:Class="TaskbarPlayer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TaskbarPlayer" Height="48" SizeToContent="Width"
+		WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        FontFamily="Segoe UI Variable Display, Segoe UI Variable, Segoe UI"
+        PreviewMouseWheel="Window_Wheel">
+
+	<Window.Resources>
+		<!-- Прозрачная иконочная кнопка с «пружинкой» при нажатии -->
+		<Style x:Key="IconBtn" TargetType="Button">
+			<Setter Property="Foreground" Value="#FFFFFFFF"/>
+			<Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+			<Setter Property="FontSize" Value="14"/>
+			<Setter Property="Width" Value="28"/>
+			<Setter Property="Height" Value="28"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="Focusable" Value="False"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bg" Background="Transparent" CornerRadius="14"
+                                RenderTransformOrigin="0.5,0.5">
+							<Border.RenderTransform>
+								<ScaleTransform ScaleX="1" ScaleY="1"/>
+							</Border.RenderTransform>
+							<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Bg" Property="Background" Value="#1FFFFFFF"/>
+							</Trigger>
+							<Trigger Property="IsPressed" Value="True">
+								<Trigger.EnterActions>
+									<BeginStoryboard>
+										<Storyboard>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                To="0.84" Duration="0:0:0.08"/>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                To="0.84" Duration="0:0:0.08"/>
+										</Storyboard>
+									</BeginStoryboard>
+								</Trigger.EnterActions>
+								<Trigger.ExitActions>
+									<BeginStoryboard>
+										<Storyboard>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                To="1" Duration="0:0:0.35">
+												<DoubleAnimation.EasingFunction>
+													<ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/>
+												</DoubleAnimation.EasingFunction>
+											</DoubleAnimation>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                To="1" Duration="0:0:0.35">
+												<DoubleAnimation.EasingFunction>
+													<ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/>
+												</DoubleAnimation.EasingFunction>
+											</DoubleAnimation>
+										</Storyboard>
+									</BeginStoryboard>
+								</Trigger.ExitActions>
+							</Trigger>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter Property="Opacity" Value="0.35"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<!-- Стеклянная кнопка Play/Pause -->
+		<Style x:Key="PlayBtn" TargetType="Button">
+			<Setter Property="Foreground" Value="#FFFFFFFF"/>
+			<Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+			<Setter Property="FontSize" Value="16"/>
+			<Setter Property="Width" Value="32"/>
+			<Setter Property="Height" Value="32"/>
+			<Setter Property="Margin" Value="2,0"/>
+			<Setter Property="Cursor" Value="Hand"/>
+			<Setter Property="Focusable" Value="False"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border x:Name="Bg" Background="#2EFFFFFF" CornerRadius="16"
+                                BorderThickness="1" BorderBrush="#26FFFFFF"
+                                RenderTransformOrigin="0.5,0.5">
+							<Border.RenderTransform>
+								<ScaleTransform ScaleX="1" ScaleY="1"/>
+							</Border.RenderTransform>
+							<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Bg" Property="Background" Value="#45FFFFFF"/>
+							</Trigger>
+							<Trigger Property="IsPressed" Value="True">
+								<Trigger.EnterActions>
+									<BeginStoryboard>
+										<Storyboard>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                To="0.86" Duration="0:0:0.08"/>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                To="0.86" Duration="0:0:0.08"/>
+										</Storyboard>
+									</BeginStoryboard>
+								</Trigger.EnterActions>
+								<Trigger.ExitActions>
+									<BeginStoryboard>
+										<Storyboard>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                To="1" Duration="0:0:0.35">
+												<DoubleAnimation.EasingFunction>
+													<ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/>
+												</DoubleAnimation.EasingFunction>
+											</DoubleAnimation>
+											<DoubleAnimation Storyboard.TargetName="Bg"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                To="1" Duration="0:0:0.35">
+												<DoubleAnimation.EasingFunction>
+													<ElasticEase Oscillations="1" Springiness="5" EasingMode="EaseOut"/>
+												</DoubleAnimation.EasingFunction>
+											</DoubleAnimation>
+										</Storyboard>
+									</BeginStoryboard>
+								</Trigger.ExitActions>
+							</Trigger>
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter Property="Opacity" Value="0.4"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+	</Window.Resources>
+
+	<Border x:Name="Root" CornerRadius="8" BorderThickness="1"
+        Background="#E6000000" BorderBrush="#20FFFFFF">
+		<Grid>
+			<StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0,10,0">
+
+				<!-- Обложка (убран дубликат Background) -->
+				<Border x:Name="Cover" Width="30" Height="30" CornerRadius="6"
+                        Background="#33202020" BorderThickness="0.5" BorderBrush="#40FFFFFF"
+                        Cursor="Hand" MouseEnter="Cover_Enter" MouseLeave="Cover_Leave"
+                        MouseLeftButtonUp="Cover_Click">
+					<Grid>
+						<Border CornerRadius="6">
+							<Border.Background>
+								<ImageBrush x:Name="CoverBrush" Stretch="UniformToFill"/>
+							</Border.Background>
+						</Border>
+						<Border x:Name="CoverOverlay" CornerRadius="6" Background="#88000000" Opacity="0">
+							<TextBlock Text="&#xE740;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                       FontSize="12" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+						</Border>
+					</Grid>
+				</Border>
+
+				<!-- Название / исполнитель -->
+				<StackPanel Width="110" Margin="9,0,4,0" VerticalAlignment="Center">
+					<TextBlock x:Name="TitleText" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFFFFFFF"
+                               TextTrimming="CharacterEllipsis"/>
+					<TextBlock x:Name="ArtistText" FontSize="11" Foreground="#99FFFFFF"
+                               TextTrimming="CharacterEllipsis"/>
+				</StackPanel>
+
+				<Button x:Name="ShuffleBtn" Style="{StaticResource IconBtn}" Content="&#xE8B1;"
+                        Visibility="Collapsed" Click="Shuffle_Click" ToolTip="Перемешать"/>
+				<Button x:Name="PrevBtn" Style="{StaticResource IconBtn}" Content="&#xE892;"
+                        Click="Prev_Click" ToolTip="Назад"/>
+				<Button x:Name="PlayBtn" Style="{StaticResource PlayBtn}" Content="&#xE768;"
+                        Click="Play_Click"/>
+				<Button x:Name="NextBtn" Style="{StaticResource IconBtn}" Content="&#xE893;"
+                        Click="Next_Click" ToolTip="Вперёд"/>
+				<Image x:Name="CatAnimation"
+       Width="36" Height="32"
+       Margin="8,0,0,0"
+       gif:AnimationBehavior.SourceUri="pack://application:,,,/cat-cat-sleep.gif" />
+				<Button x:Name="RepeatBtn" Style="{StaticResource IconBtn}" Content="&#xE8EE;"
+                        Visibility="Collapsed" Click="Repeat_Click" ToolTip="Повтор"/>
+
+				<!-- Тонкая полоса прогресса -->
+				<Grid x:Name="ProgressHost" Width="64" Height="22" Margin="6,0,0,0" Background="Transparent"
+                      Cursor="Hand" Visibility="Collapsed" MouseLeftButtonDown="Progress_Down">
+					<Border x:Name="ProgressTrack" Height="4" CornerRadius="2" Background="#40FFFFFF"
+                            VerticalAlignment="Center"/>
+					<Border x:Name="ProgressFill" Height="4" CornerRadius="2" Background="#FFFFFFFF"
+                            HorizontalAlignment="Left" VerticalAlignment="Center" Width="0"
+                            IsHitTestVisible="False"/>
+				</Grid>
+
+				<TextBlock x:Name="TimeText" Visibility="Collapsed" FontSize="11" Foreground="#99FFFFFF"
+                           VerticalAlignment="Center" Margin="6,0,0,0" Width="66" TextTrimming="CharacterEllipsis"/>
+			</StackPanel>
+		</Grid>
+	</Border>
+</Window>

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 19041 нужен, чтобы из WPF напрямую вызывать WinRT (Windows.Media.Control / SMTC) -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>TaskbarPlayer</AssemblyName>
+    <RootNamespace>TaskbarPlayer</RootNamespace>
+
+    <!-- Лёгкость: меньше потоков GC, без лишних языков и PGO-инструментации -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <TieredPGO>false</TieredPGO>
+    <TieredCompilation>true</TieredCompilation>
+  </PropertyGroup>
+
+  <!-- WPF-SDK убирает эти пространства имён из автоматических using -->
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
+  </ItemGroup>
+  <ItemGroup>
+	<Resource Include="cat-cat-sleep.gif" />
+    <PackageReference Include="XamlAnimatedGif" Version="2.3.2" />
+  </ItemGroup>
+	<Target Name="DisableWinRTSourceGenerator" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="'%(FileName)%(Extension)' == 'WinRT.SourceGenerator.dll'"/>
+    </ItemGroup>
+  </Target>
+</Project>
