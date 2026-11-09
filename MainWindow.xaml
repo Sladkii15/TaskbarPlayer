@@ -146,7 +146,8 @@
 	</Window.Resources>
 
 	<Border x:Name="Root" CornerRadius="8" BorderThickness="1"
-        Background="#E6000000" BorderBrush="#20FFFFFF">
+        Background="#E6000000" BorderBrush="#20FFFFFF"
+        MouseLeftButtonDown="Root_Down" MouseRightButtonUp="Root_RightUp">
 		<Grid>
 			<StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0,10,0">
 
@@ -185,13 +186,26 @@
                         Click="Play_Click"/>
 				<Button x:Name="NextBtn" Style="{StaticResource IconBtn}" Content="&#xE893;"
                         Click="Next_Click" ToolTip="Вперёд"/>
-				<Image x:Name="CatAnimation"
-       Width="36" Height="32"
-       Margin="8,0,0,0"
-       gif:AnimationBehavior.SourceUri="pack://application:,,,/cat-cat-sleep.gif" />
 				<Button x:Name="RepeatBtn" Style="{StaticResource IconBtn}" Content="&#xE8EE;"
                         Visibility="Collapsed" Click="Repeat_Click" ToolTip="Повтор"/>
 
+
+				<!-- Котик = кнопка «В избранное» -->
+				<Button x:Name="FavBtn" Style="{StaticResource IconBtn}" Width="40" Height="32" Margin="6,0,0,0"
+				        Click="Fav_Click" ToolTip="В избранное">
+					<Grid Width="36" Height="32">
+						<Image x:Name="CatAnimation" Width="36" Height="32"
+						       gif:AnimationBehavior.SourceUri="pack://application:,,,/cat-cat-sleep.gif" />
+						<TextBlock x:Name="FavHeart" Text="&#xEB51;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+						           FontSize="12" Foreground="#B0FFFFFF"
+						           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,2"
+						           RenderTransformOrigin="0.5,0.5">
+							<TextBlock.RenderTransform>
+								<ScaleTransform x:Name="HeartScale" ScaleX="1" ScaleY="1"/>
+							</TextBlock.RenderTransform>
+						</TextBlock>
+					</Grid>
+				</Button>
 				<!-- Тонкая полоса прогресса -->
 				<Grid x:Name="ProgressHost" Width="64" Height="22" Margin="6,0,0,0" Background="Transparent"
                       Cursor="Hand" Visibility="Collapsed" MouseLeftButtonDown="Progress_Down">

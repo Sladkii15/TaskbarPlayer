@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using System.Globalization;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -80,6 +83,30 @@ public partial class MainWindow : Window
     string _lastKey = "";
     DateTime _lastWheel = DateTime.MinValue;
 
+    // ---------- Избранное (локальный список виджета) ----------
+    public sealed class Fav
+    {
+        public string Title { get; set; } = "";
+        public string Artist { get; set; } = "";
+        public string Source { get; set; } = "";
+        public DateTime Added { get; set; }
+    }
+    List<Fav> _favs = new();
+    string _curTitle = "", _curArtist = "";
+
+    static readonly Brush HeartOn = Frozen(new SolidColorBrush(Color.FromRgb(0xFF, 0x4D, 0x9D)));          // в избранном: розовое
+    static readonly Brush HeartOff = Frozen(new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)));  // не в избранном: белый контур
+    static readonly Random Rng = new();
+    static readonly Color[] Pinks =
+    {
+        Color.FromRgb(0xFF, 0x4D, 0x9D), Color.FromRgb(0xFF, 0x7B, 0xB5), Color.FromRgb(0xFF, 0x9B, 0xC7),
+        Color.FromRgb(0xFF, 0x5C, 0x8A), Color.FromRgb(0xFF, 0xB3, 0xD1),
+    };
+    Popup? _heartPopup;
+
+    // Все медиа-сессии системы (Spotify, браузер, Яндекс Музыка...) для автопереключения на играющую
+    readonly Dictionary<string, GlobalSystemMediaTransportControlsSession> _watched = new();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -106,6 +133,7 @@ public partial class MainWindow : Window
         ProgressTrack.SizeChanged += (_, _) => UpdateProgress();
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.InvokeAsync(PlaceWindow);
 
+        LoadFavs();
         _ = InitAsync();
     }
 
@@ -124,12 +152,14 @@ public partial class MainWindow : Window
 
         m.SessionsChanged += (_, _) => Dispatcher.InvokeAsync(() =>
         {
+            WatchAll();
             // если наш источник закрылся: переключаемся на текущий системный
             var alive = _session is not null &&
                         m.GetSessions().Any(x => x.SourceAppUserModelId == _session.SourceAppUserModelId);
             if (!alive) Attach(m.GetCurrentSession());
         });
 
+        WatchAll();
         Attach(m.GetCurrentSession());
     }
 
@@ -168,6 +198,218 @@ public partial class MainWindow : Window
         RefreshPlayback();
     }
 
+    // =====================================================================
+    //  Автопереключение на источник, который начал играть
+    //  (например, включили YouTube в браузере, пока Spotify на паузе)
+    // =====================================================================
+    void WatchAll()
+    {
+        var m = _mgr;
+        if (m is null) return;
+
+        IReadOnlyList<GlobalSystemMediaTransportControlsSession> list;
+        try { list = m.GetSessions(); }
+        catch { return; }
+
+        var alive = new HashSet<string>();
+        foreach (var s in list)
+        {
+            var id = s.SourceAppUserModelId;
+            alive.Add(id);
+            if (_watched.ContainsKey(id)) continue;
+            _watched[id] = s;
+            s.PlaybackInfoChanged += OnAnyPlayback;
+        }
+
+        foreach (var id in _watched.Keys.Where(k => !alive.Contains(k)).ToList())
+        {
+            try { _watched[id].PlaybackInfoChanged -= OnAnyPlayback; } catch { }
+            _watched.Remove(id);
+        }
+    }
+
+    void OnAnyPlayback(GlobalSystemMediaTransportControlsSession s, PlaybackInfoChangedEventArgs e) =>
+        Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                if (s.GetPlaybackInfo().PlaybackStatus != GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing) return;
+                if (_session is not null && _session.SourceAppUserModelId == s.SourceAppUserModelId) return;
+
+                // переключаемся, только если текущий источник сейчас не играет
+                var curPlaying = _session?.GetPlaybackInfo().PlaybackStatus
+                                 == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                if (!curPlaying) Attach(s);
+            }
+            catch { }
+        });
+
+    // =====================================================================
+    //  Избранное: список хранится в %AppData%\TaskbarPlayer\favorites.json
+    //  (системный API Windows не умеет ставить «лайк» в Яндекс Музыке/Spotify)
+    // =====================================================================
+    static string FavFile => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TaskbarPlayer", "favorites.json");
+
+    void LoadFavs()
+    {
+        try
+        {
+            if (System.IO.File.Exists(FavFile))
+                _favs = JsonSerializer.Deserialize<List<Fav>>(System.IO.File.ReadAllText(FavFile)) ?? new List<Fav>();
+        }
+        catch { _favs = new List<Fav>(); }
+    }
+
+    void SaveFavs()
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(FavFile)!);
+            var opts = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+            System.IO.File.WriteAllText(FavFile, JsonSerializer.Serialize(_favs, opts));
+        }
+        catch { }
+    }
+
+    void UpdateFavUi()
+    {
+        var has = !string.IsNullOrWhiteSpace(_curTitle);
+        var fav = has && _favs.Any(f => f.Title == _curTitle && f.Artist == _curArtist);
+        FavBtn.IsEnabled = has;
+        FavHeart.Text = fav ? "\uEB52" : "\uEB51"; // заливка / контур
+        FavHeart.Foreground = fav ? HeartOn : HeartOff;
+        FavBtn.ToolTip = fav ? "Убрать из избранного" : "В избранное";
+    }
+
+    void Fav_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_curTitle)) return;
+
+        var existing = _favs.FirstOrDefault(f => f.Title == _curTitle && f.Artist == _curArtist);
+        var added = existing is null;
+
+        if (added)
+        {
+            _favs.Add(new Fav
+            {
+                Title = _curTitle,
+                Artist = _curArtist,
+                Source = _session is null ? "" : FriendlyName(_session.SourceAppUserModelId),
+                Added = DateTime.Now,
+            });
+        }
+        else
+        {
+            _favs.Remove(existing!);
+        }
+
+        SaveFavs();
+        UpdateFavUi();
+
+        if (added)
+        {
+            PopHeart();
+            LaunchHearts();
+        }
+    }
+
+    // Сердечко на котике «подпрыгивает»
+    void PopHeart()
+    {
+        var pop = new DoubleAnimation(1.9, 1.0, TimeSpan.FromMilliseconds(380))
+        {
+            EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 }
+        };
+        HeartScale.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
+        HeartScale.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
+    }
+
+    // 3-5 розовых сердечек взлетают над котиком (отдельное прозрачное окно-Popup, чтобы вылетать за границы виджета)
+    void LaunchHearts()
+    {
+        try
+        {
+            if (_heartPopup is not null) _heartPopup.IsOpen = false;
+
+            var canvas = new Canvas { Width = 64, Height = 100, Background = Brushes.Transparent, IsHitTestVisible = false };
+            var popup = new Popup
+            {
+                Child = canvas,
+                AllowsTransparency = true,
+                StaysOpen = true,
+                IsHitTestVisible = false,
+                PopupAnimation = PopupAnimation.None,
+                PlacementTarget = FavBtn,
+                Placement = PlacementMode.Top,
+                HorizontalOffset = (FavBtn.ActualWidth - canvas.Width) / 2,
+                VerticalOffset = 18,
+            };
+
+            var icons = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets");
+            var count = Rng.Next(3, 6); // 3..5
+            for (var i = 0; i < count; i++)
+            {
+                var scale = new ScaleTransform(0.6, 0.6);
+                var heart = new TextBlock
+                {
+                    Text = "\uEB52",
+                    FontFamily = icons,
+                    FontSize = Rng.Next(11, 19),
+                    Foreground = new SolidColorBrush(Pinks[Rng.Next(Pinks.Length)]),
+                    Opacity = 0,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                    RenderTransform = scale,
+                };
+
+                double x0 = 25 + Rng.Next(-8, 9);
+                Canvas.SetLeft(heart, x0);
+                Canvas.SetTop(heart, 84);
+                canvas.Children.Add(heart);
+
+                var delay = TimeSpan.FromMilliseconds(i * 110 + Rng.Next(0, 60));
+                var dur = TimeSpan.FromMilliseconds(Rng.Next(900, 1300));
+
+                // вверх с замедлением
+                heart.BeginAnimation(Canvas.TopProperty, new DoubleAnimation(84, Rng.Next(4, 28), dur)
+                {
+                    BeginTime = delay,
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                });
+                // лёгкий дрейф в сторону
+                heart.BeginAnimation(Canvas.LeftProperty, new DoubleAnimation(x0, x0 + Rng.Next(-18, 19), dur)
+                {
+                    BeginTime = delay,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+                });
+                // появился, повисел, растаял
+                var fade = new DoubleAnimationUsingKeyFrames { BeginTime = delay, Duration = dur };
+                fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.15)));
+                fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.60)));
+                fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1.0)));
+                heart.BeginAnimation(OpacityProperty, fade);
+                // растёт по пути
+                var grow = new DoubleAnimation(0.6, 1.1, dur) { BeginTime = delay };
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+            }
+
+            popup.IsOpen = true;
+            _heartPopup = popup;
+
+            // самое долгое сердечко заканчивается примерно через 1.8 с
+            var closer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2000) };
+            closer.Tick += (_, _) =>
+            {
+                closer.Stop();
+                popup.IsOpen = false;
+                if (ReferenceEquals(_heartPopup, popup)) _heartPopup = null;
+            };
+            closer.Start();
+        }
+        catch { }
+    }
+
     void OnMedia(GlobalSystemMediaTransportControlsSession s, MediaPropertiesChangedEventArgs e) =>
         Dispatcher.InvokeAsync(() => RefreshMediaAsync());
 
@@ -194,6 +436,9 @@ public partial class MainWindow : Window
         var artist = string.IsNullOrWhiteSpace(p.Artist) ? p.AlbumArtist : p.Artist;
         ArtistText.Text = artist ?? "";
         ArtistText.Visibility = string.IsNullOrWhiteSpace(artist) ? Visibility.Collapsed : Visibility.Visible;
+        _curTitle = p.Title ?? "";
+        _curArtist = artist ?? "";
+        UpdateFavUi();
 
         var key = $"{p.Title}|{p.Artist}|{p.AlbumTitle}";
         if (key != _lastKey || CoverBrush.ImageSource is null)
@@ -314,6 +559,12 @@ public partial class MainWindow : Window
         if (l.Contains("chrome")) return "Chrome";
         if (l.Contains("firefox")) return "Firefox";
         if (l.Contains("opera")) return "Opera";
+        if (l.Contains("brave")) return "Brave";
+        if (l.Contains("vivaldi")) return "Vivaldi";
+        if (l.Contains("vlc")) return "VLC";
+        if (l.Contains("aimp")) return "AIMP";
+        if (l.Contains("foobar")) return "foobar2000";
+        if (l.Contains("zune")) return "Проигрыватель Windows";
         return id.Replace(".exe", "", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -514,6 +765,27 @@ public partial class MainWindow : Window
             }
 
             menu.Items.Add(new Separator());
+
+            var favMenu = new MenuItem { Header = $"Избранное ({_favs.Count})" };
+            if (_favs.Count == 0)
+            {
+                favMenu.Items.Add(new MenuItem { Header = "Пока пусто: нажмите на котика", IsEnabled = false });
+            }
+            else
+            {
+                foreach (var f in Enumerable.Reverse(_favs).Take(15))
+                {
+                    var text = string.IsNullOrWhiteSpace(f.Artist) ? f.Title : $"{f.Artist} — {f.Title}";
+                    var fi = new MenuItem { Header = text.Length > 60 ? text.Substring(0, 60) + "…" : text, ToolTip = "Скопировать название" };
+                    fi.Click += (_, _) => { try { Clipboard.SetText(text); } catch { } };
+                    favMenu.Items.Add(fi);
+                }
+                favMenu.Items.Add(new Separator());
+                var openList = new MenuItem { Header = "Открыть файл со списком" };
+                openList.Click += (_, _) => { try { Process.Start(new ProcessStartInfo(FavFile) { UseShellExecute = true }); } catch { } };
+                favMenu.Items.Add(openList);
+            }
+            menu.Items.Add(favMenu);
 
             var auto = new MenuItem { Header = "Запускать вместе с Windows", IsCheckable = true, IsChecked = IsAutostart() };
             auto.Click += (_, _) => SetAutostart(auto.IsChecked);
